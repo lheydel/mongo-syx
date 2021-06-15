@@ -1,0 +1,18 @@
+# Mongo-Sync Configurations
+
+db: syx
+host:
+  url: localhost
+  port: 27017
+access:
+  username: admin
+  password: admin
+
+tunnel:
+  enable: false
+  access:
+    username: 'remote_ssh_user'
+    port: 22
+
+# All of the parameters above are required,
+# without them, the script will fail
