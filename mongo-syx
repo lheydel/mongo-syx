@@ -81,11 +81,23 @@ function get_script_dir {
     echo $SCRIPT_PATH
 }
 
-function get_confirmation() {
-    read -p "Are you sure you want to $1? Enter 'yes': " mongo_confr
+function soft_confirmation {
+    read -p "Are you sure you want to copy [$ORIGIN] into [$DESTINATION]? Enter 'yes': " response
 
-    case $mongo_confr in
+    case $response in
         [yY][Ee][Ss] )  ;;
+        *) echo "Incorrect input, aborting..."; exit;;
+    esac
+}
+
+function strong_confirmation {
+    local operation=$1
+    local environment=$2
+
+    read -p "Strong confirmation is enabled on '$environment' for operation '$operation'. Enter '$operation $environment' to continue... " response
+ 
+    case $response in
+        "$operation $environment") ;;
         *) echo "Incorrect input, aborting..."; exit;;
     esac
 }
@@ -124,6 +136,7 @@ function load_configs {
     # - $*_tunnel_on
     # - $*_tunnel_access_username
     # - $*_tunnel_access_port
+    # - $*_confirmation_write
 
     ORIGIN_CREDENTIALS=""
     if [[ ! -z $origin_access_username ]] ; then
@@ -166,20 +179,7 @@ function close_tunnel {
     ssh -S db-sync-socket -O exit $TUNNEL_CREDENTIALS 2> /dev/null
 }
 
-function do_sync {
-    banner
-    if [ "$SKIP_CONFIRM" == false ] ; then
-        get_confirmation "blblbl"
-    fi
-
-    load_configs
-
-#    if [ "$tunnel_on" == true ] ; then
-#        open_tunnel
-#        remote_host_url="localhost"
-#        remote_host_port=$TUNNEL_PORT
-#    fi
-
+function do_read {
     echo "Dumping '$ORIGIN' DB to $DUMP_DIR..."
     mongodump \
          -h "$origin_host_url":"$origin_host_port" \
@@ -188,7 +188,11 @@ function do_sync {
          -o "$DUMP_DIR"
     success_msg
 
+}
+
+function do_write {
     echo "Overwriting '$DESTINATION' DB with dump..."
+
     mongorestore \
          -h "$destination_host_url":"$destination_host_port" \
          -d "$destination_db" \
@@ -196,6 +200,28 @@ function do_sync {
          --nsExclude "*.system.*" \
          "$DUMP_DIR"/"$origin_db" --drop
     success_msg
+}
+
+function do_sync {
+    banner
+    if [ "$SKIP_CONFIRM" == false ] ; then
+        soft_confirmation
+    fi
+
+    load_configs
+
+    if [ "$destination_confirmation_write" == true ] ; then
+         strong_confirmation "write" "$DESTINATION"
+    fi
+
+#    if [ "$tunnel_on" == true ] ; then
+#        open_tunnel
+#        remote_host_url="localhost"
+#        remote_host_port=$TUNNEL_PORT
+#    fi
+
+     do_read
+     do_write
 
 #    if [ "$tunnel_on" == true ] ; then
 #        close_tunnel

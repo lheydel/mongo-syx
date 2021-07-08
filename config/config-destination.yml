@@ -8,6 +8,9 @@ access:
   username: admin
   password: admin
 
+confirmation:
+  write: true
+
 tunnel:
   enable: false
   access:
