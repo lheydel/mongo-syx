@@ -148,8 +148,9 @@ function load_configs {
         DESTINATION_CREDENTIALS="-u $destination_access_username -p $destination_access_password"
     fi
 
-    #TUNNEL_CREDENTIALS="$tunnel_access_username@$remote_host_url"
-    #TUNNEL_PORT=27018
+    ORIGIN_TUNNEL_CREDENTIALS="$origin_tunnel_access_username@$origin_host_url"
+    DESTINATION_TUNNEL_CREDENTIALS="$destination_tunnel_access_username@$destination_host_url"
+    TUNNEL_PORT=27666
 
     DUMP_DIR=/tmp/"$origin_db"/dump
 }
@@ -170,16 +171,28 @@ function done_msg {
 }
 
 function open_tunnel {
+    local credentials=$1
+    local ssh_port=$2
+    local mongo_port=$3
+
     echo "Connecting through SSH tunnel..."
-    ssh -fqTNM -S db-sync-socket -L $TUNNEL_PORT:127.0.0.1:$remote_host_port $TUNNEL_CREDENTIALS -p $tunnel_access_port
+    ssh -fqTNM -S db-sync-socket -L $TUNNEL_PORT:127.0.0.1:$mongo_port $credentials -p $ssh_port
 }
 
 function close_tunnel {
+    local credentials=$1
+
     echo "Disconnecting from SSH tunnel..."
-    ssh -S db-sync-socket -O exit $TUNNEL_CREDENTIALS 2> /dev/null
+    ssh -S db-sync-socket -O exit $credentials 2> /dev/null
 }
 
 function do_read {
+    if [ "$origin_tunnel_enable" == true ] ; then
+        open_tunnel $ORIGIN_TUNNEL_CREDENTIALS $origin_tunnel_access_port $origin_host_port
+        origin_host_url="localhost"
+        origin_host_port=$TUNNEL_PORT
+    fi
+
     echo "Dumping '$ORIGIN' DB to $DUMP_DIR..."
     mongodump \
          -h "$origin_host_url":"$origin_host_port" \
@@ -188,11 +201,19 @@ function do_read {
          -o "$DUMP_DIR"
     success_msg
 
+    if [ "$origin_tunnel_enable" == true ] ; then
+        close_tunnel $ORIGIN_TUNNEL_CREDENTIALS
+    fi
 }
 
 function do_write {
-    echo "Overwriting '$DESTINATION' DB with dump..."
+    if [ "$destination_tunnel_enable" == true ] ; then
+        open_tunnel $DESTINATION_TUNNEL_CREDENTIALS $destination_tunnel_access_port $destination_host_port
+        destination_host_url="localhost"
+        destination_host_port=$TUNNEL_PORT 
+    fi
 
+    echo "Overwriting '$DESTINATION' DB with dump..."
     mongorestore \
          -h "$destination_host_url":"$destination_host_port" \
          -d "$destination_db" \
@@ -200,6 +221,10 @@ function do_write {
          --nsExclude "*.system.*" \
          "$DUMP_DIR"/"$origin_db" --drop
     success_msg
+
+    if [ "$destination_tunnel_enable" == true ] ; then
+        close_tunnel $DESTINATION_TUNNEL_CREDENTIALS
+    fi
 }
 
 function do_sync {
@@ -214,18 +239,8 @@ function do_sync {
          strong_confirmation "write" "$DESTINATION"
     fi
 
-#    if [ "$tunnel_on" == true ] ; then
-#        open_tunnel
-#        remote_host_url="localhost"
-#        remote_host_port=$TUNNEL_PORT
-#    fi
-
      do_read
      do_write
-
-#    if [ "$tunnel_on" == true ] ; then
-#        close_tunnel
-#    fi
 }
 
 
