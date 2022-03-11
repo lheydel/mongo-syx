@@ -2,6 +2,7 @@
 
 Mongo-syx is a utility script able to copy one mongo database into another running on a different host.  
 It is based on [mongo_sync](https://github.com/sheharyarn/mongo-sync) and uses mongodump and mongorestore under the hood.
+The yml parser comes from [bash-yaml](https://github.com/jasperes/bash-yaml)
 
 ## Configuration
 
@@ -45,7 +46,7 @@ To do this, it will read the configuration files `config-origin.yml` and `config
 
 There are two level of confirmation asking before the script starts its work.  
 The first one is a soft confirmation skippable with a `-y` arg.  
-The second one is a strong and unskippable confirmation that can be enable from the configurations.
+The second one is a strong and unskippable confirmation that can be enabled from the configurations.
 
 ## Notes
 

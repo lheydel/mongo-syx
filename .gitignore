@@ -1,5 +1,3 @@
-old
-
 config/*
 !config/config-origin.yml
 !config/config-destination.yml

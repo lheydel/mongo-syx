@@ -5,6 +5,23 @@ set -o pipefail  # trace ERR through pipes
 set -o errtrace  # trace ERR through 'time command' and other functions
 set -o errexit   # exit the script if any statement returns a non-true return value
 
+function get_script_dir {
+    pushd . > /dev/null
+    local SCRIPT_PATH="${BASH_SOURCE[0]}"
+
+    if ([ -h "${SCRIPT_PATH}" ]) then
+      while ([ -h "${SCRIPT_PATH}" ]) do cd `dirname "$SCRIPT_PATH"`; SCRIPT_PATH=`readlink "${SCRIPT_PATH}"`; done
+    fi
+
+    cd `dirname ${SCRIPT_PATH}` > /dev/null
+    local SCRIPT_PATH=`pwd`;
+    popd  > /dev/null
+
+    echo $SCRIPT_PATH
+}
+
+source "$(get_script_dir)/yaml.sh"
+
 function cleanup {
     echo "Cleaning up..."
     if [ -z ${DUMP_DIR+x} ] ; then
@@ -50,37 +67,6 @@ function config_not_found {
     exit
 }
 
-function parse_yaml {
-    s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
-    sed -ne "s|^\($s\):|\1|" \
-        -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
-        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  "$1" |
-    awk -F$fs '{
-        indent = length($1)/2;
-        vname[indent] = $2;
-        for (i in vname) {if (i > indent) {delete vname[i]}}
-        if (length($3) > 0) {
-            vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
-            printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
-        }
-   }'
-}
-
-function get_script_dir {
-    pushd . > /dev/null
-    local SCRIPT_PATH="${BASH_SOURCE[0]}"
-
-    if ([ -h "${SCRIPT_PATH}" ]) then
-      while ([ -h "${SCRIPT_PATH}" ]) do cd `dirname "$SCRIPT_PATH"`; SCRIPT_PATH=`readlink "${SCRIPT_PATH}"`; done
-    fi
-
-    cd `dirname ${SCRIPT_PATH}` > /dev/null
-    local SCRIPT_PATH=`pwd`;
-    popd  > /dev/null
-
-    echo $SCRIPT_PATH
-}
-
 function soft_confirmation {
     read -p "Are you sure you want to copy [$ORIGIN] into [$DESTINATION]? Enter 'yes': " response
 
@@ -109,7 +95,8 @@ function load_config_file {
     echo "Parsing '$file'..."
 
     if [ -f "$file" ]; then
-       eval $(parse_yaml "$file" "$prefix")
+       #eval $(parse_yaml "$file" "$prefix")
+       yaml_set "$file" "$prefix"
        success_msg
     else
        config_not_found $file
@@ -133,7 +120,7 @@ function load_configs {
     # - $*_host_port
     # - $*_access_username
     # - $*_access_password
-    # - $*_tunnel_on
+    # - $*_tunnel_enable
     # - $*_tunnel_access_username
     # - $*_tunnel_access_port
     # - $*_confirmation_write
@@ -150,7 +137,7 @@ function load_configs {
 
     ORIGIN_TUNNEL_CREDENTIALS="$origin_tunnel_access_username@$origin_host_url"
     DESTINATION_TUNNEL_CREDENTIALS="$destination_tunnel_access_username@$destination_host_url"
-    TUNNEL_PORT=27666
+    TUNNEL_PORT=27777
 
     DUMP_DIR=/tmp/"$origin_db"/dump
 }
@@ -229,6 +216,7 @@ function do_write {
 
 function do_sync {
     banner
+
     if [ "$SKIP_CONFIRM" == false ] ; then
         soft_confirmation
     fi
